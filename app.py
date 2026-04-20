@@ -1,11 +1,18 @@
 # Import necessary libraries
+import base64
+from io import BytesIO
 import json
 import gradio as gr
 from openai import OpenAI
 from dotenv import load_dotenv
+from gradio import Image
 
 # Load environment variables from .env file
 load_dotenv()
+
+MODEL = "gpt-4o-mini"
+VOICE_MODEL = "gpt-4o-mini-tts"
+IMAGE_MODEL = "dall-e-3"
 
 # Initialize OpenAI client
 openai=OpenAI()
@@ -57,3 +64,56 @@ tools = [
     }
 ]
 
+# Generate a image response
+def artist(destination):
+    print(f"Generating cinematic image for {destination}...")
+    image_response = openai.images.generate(
+        model=IMAGE_MODEL,
+        prompt=(
+            f"A breathtaking cinematic travel photograph of {destination}. "
+            "Golden hour lighting, vibrant colors, photorealistic, "
+            "professional travel photography, wide angle shot."
+        ),
+        size="1024x1024",
+        quality="standard",
+        n=1,
+        response_format="b64_json"
+    )
+    # Prompt → OpenAI API → Base64 Image → Decode → PIL Image → Return
+    image_base64 = image_response.data[0].b64_json
+    image_data = base64.b64decode(image_base64)
+    return Image.open(BytesIO(image_data))
+
+# Generate a voice response
+
+# option 1
+# def talker(message):
+#     print(f"Generating voice response for message: {message}")
+#     audio_response = openai.audio.speech.create(
+#         model=VOICE_MODEL,
+#         input=message,
+#         voice="alloy",  # You can choose different voices if available
+#     )
+#     return audio_response.content  # This will be the audio data in bytes
+
+# option 2
+def talker(args):
+    print(f"Generating voice response for message: {args['destination']}")
+    text = (
+        f"Great choice! {args['destination']} is an amazing destination." 
+        f"{args['reason']}"
+        f"Top things to do: {', '.join(args['top_3_things'])}."
+    )
+    response = openai.audio.speech.create(
+        model=VOICE_MODEL,
+        input=text,
+        voice="nova",  # You can choose different voices if available
+    )
+    audio_path = "travel_recommendation.mp3"
+    with open(audio_path, "wb") as audio_file:
+        audio_file.write(response.content)
+    return audio_path # This will be the audio data in bytes
+
+
+# Sends the full conversation history + new message to GPT-4o-mini
+# Returns either a plain text reply (still asking questions)
