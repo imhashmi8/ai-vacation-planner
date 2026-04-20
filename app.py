@@ -136,3 +136,89 @@ def handle_tool_call(message):
             }  
             )
     return rec_args, responses
+
+
+def chat(history):
+    history = [{"role": h["role"], "content": h["content"]} for h in history]
+    messages = [ {"role": "system", "content": SYSTEM_PROMPT} ] + history
+    response = openai.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        tools=tools,
+        max_tokens=500,
+    )
+    rec_args = None
+    while response.choices[0].finish_reason =="tool_calls":
+        message = response.choices[0].message
+        rec_args, responses = handle_tool_call(message)
+        message.append(message)
+        messages.extend(responses)
+        response = openai.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            tools=tools,
+            max_tokens=500
+        )
+    reply = response.choices[0].message.content
+    history = history + [{"role": "assistant", "content": reply}]
+
+    image = None
+    audio = None
+
+    # If a tool was called, trigger the image and audio generation functions with the recommended destination
+    if rec_args:
+        image = artist(rec_args["destination"])
+        audio = talker(rec_args)
+
+    return history, image, audio
+
+
+def put_message(history, message):
+    return "", history + [{"role": "user", "content": message}]
+
+
+# Auto-starts with AI greeting on page load
+# Sends a hidden trigger message and shows only the assistant greeting
+def start_conversation():
+    trigger = [{"role": "user", "content": "Hi! I want to find my perfect travel destination."}]
+    updated_history, _, _ = chat(trigger)
+    greeting_only = [m for m in updated_history if m["role"] == "assistant"]
+    return greeting_only, None, None
+
+
+# Gradio UI - chat on left, image and audio on right
+with gr.Blocks(title="AI Travel Recommender", theme=gr.themes.Soft()) as app:
+    gr.Markdown("# 🌍 AI Travel Recommender\nFind your perfect travel destination with the help of our AI travel advisor! Answer a few questions and get personalized recommendations, along with stunning images and voice descriptions of your ideal getaway.")
+    
+    with gr.Row():
+        with gr.Column(scale=1):
+            chatbot = gr.Chatbot(label= "AI Travel Advisor", height=480, type="messages")
+            with gr.Row():
+                message_input = gr.Textbox(
+                    label="Your Message", 
+                    placeholder="Type your message here...", 
+                    scale=4, 
+                    container=False
+                    )
+                send_button = gr.Button("Send", scale=1, container=False)
+            clear_button = gr.Button("🔄 Start Over")
+        
+        with gr.Column(scale=1):
+            image_output = gr.Image(label="Recommended Destination", height=380, interactive=False)
+            audio_output = gr.Audio(label="🎙️ Listen to Your Recommendation", type="filepath",autoplay=True)
+
+    send_button.click(fn=put_message, inputs=[chatbot, message_input], outputs=[message_input, chatbot]).then(
+        fn=chat, inputs=chatbot, outputs=[chatbot, image_output, audio_output]
+    )
+
+    message_input.submit(fn=put_message, inputs=[chatbot, message_input], outputs=[message_input, chatbot]).then(
+        fn=chat, inputs=chatbot, outputs=[chatbot, image_output, audio_output]
+    )
+
+    clear_button.click(start_conversation, None, [chatbot, image_output, audio_output])
+
+    # Tigger AI greeting on page load
+    app.load(start_conversation, None, [chatbot, image_output, audio_output])
+
+if __name__ == "__main__":
+    app.launch()
