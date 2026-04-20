@@ -3,9 +3,9 @@ import base64
 from io import BytesIO
 import json
 import gradio as gr
-from openai import OpenAI, responses
+from openai import OpenAI
 from dotenv import load_dotenv
-from gradio import Image
+from PIL import Image
 
 # Load environment variables from .env file
 load_dotenv()
@@ -117,7 +117,7 @@ def talker(args):
 
 # Function to handle the tool call from the AI model
 def handle_tool_call(message):
-    response = []
+    responses = []
     rec_args = None
     for tool_call in message.tool_calls:
         if tool_call.function.name == "recommend_destination":
@@ -151,7 +151,7 @@ def chat(history):
     while response.choices[0].finish_reason =="tool_calls":
         message = response.choices[0].message
         rec_args, responses = handle_tool_call(message)
-        message.append(message)
+        messages.append(message)
         messages.extend(responses)
         response = openai.chat.completions.create(
             model=MODEL,
@@ -187,12 +187,12 @@ def start_conversation():
 
 
 # Gradio UI - chat on left, image and audio on right
-with gr.Blocks(title="AI Travel Recommender", theme=gr.themes.Soft()) as app:
+with gr.Blocks(title="AI Travel Recommender") as app:
     gr.Markdown("# 🌍 AI Travel Recommender\nFind your perfect travel destination with the help of our AI travel advisor! Answer a few questions and get personalized recommendations, along with stunning images and voice descriptions of your ideal getaway.")
     
     with gr.Row():
         with gr.Column(scale=1):
-            chatbot = gr.Chatbot(label= "AI Travel Advisor", height=480, type="messages")
+            chatbot = gr.Chatbot(label= "AI Travel Advisor", height=480)
             with gr.Row():
                 message_input = gr.Textbox(
                     label="Your Message", 
@@ -200,11 +200,11 @@ with gr.Blocks(title="AI Travel Recommender", theme=gr.themes.Soft()) as app:
                     scale=4, 
                     container=False
                     )
-                send_button = gr.Button("Send", scale=1, container=False)
+                send_button = gr.Button("Send", scale=1)
             clear_button = gr.Button("🔄 Start Over")
         
         with gr.Column(scale=1):
-            image_output = gr.Image(label="Recommended Destination", height=380, interactive=False)
+            image_output = gr.Image(label="Recommended Destination", height=380, width=700, interactive=False)
             audio_output = gr.Audio(label="🎙️ Listen to Your Recommendation", type="filepath",autoplay=True)
 
     send_button.click(fn=put_message, inputs=[chatbot, message_input], outputs=[message_input, chatbot]).then(
@@ -221,4 +221,4 @@ with gr.Blocks(title="AI Travel Recommender", theme=gr.themes.Soft()) as app:
     app.load(start_conversation, None, [chatbot, image_output, audio_output])
 
 if __name__ == "__main__":
-    app.launch()
+    app.launch(theme=gr.themes.Soft())
