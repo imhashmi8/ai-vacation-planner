@@ -3,7 +3,7 @@ import base64
 from io import BytesIO
 import json
 import gradio as gr
-from openai import OpenAI
+from openai import OpenAI, responses
 from dotenv import load_dotenv
 from gradio import Image
 
@@ -115,5 +115,24 @@ def talker(args):
     return audio_path # This will be the audio data in bytes
 
 
-# Sends the full conversation history + new message to GPT-4o-mini
-# Returns either a plain text reply (still asking questions)
+# Function to handle the tool call from the AI model
+def handle_tool_call(message):
+    response = []
+    rec_args = None
+    for tool_call in message.tool_calls:
+        if tool_call.function.name == "recommend_destination":
+            rec_args = json.loads(tool_call.function.arguments)
+            things = "\n".join(f"- {t}" for t in rec_args.get("top_3_things", []))
+            tool_result = (
+                f"Destination: {rec_args['destination']}\n"
+                f"Reason: {rec_args['reason']}\n"
+                f"Top 3 Things to Do:\n{things}"
+            )
+            # Append the tool result to the response with the tool call ID for reference
+            responses.append({
+                "role": "tool",
+                "content": tool_result,
+                "tool_call_id": tool_call.id
+            }  
+            )
+    return rec_args, responses
