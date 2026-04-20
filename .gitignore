@@ -15,4 +15,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-*.egg   
+*.egg
+travel_recommendation.mp3
+**.mp3
