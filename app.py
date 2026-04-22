@@ -221,4 +221,4 @@ with gr.Blocks(title="AI Travel Recommender") as app:
     app.load(start_conversation, None, [chatbot, image_output, audio_output])
 
 if __name__ == "__main__":
-    app.launch(theme=gr.themes.Soft())
+    app.launch(theme=gr.themes.Soft(), share=True)
