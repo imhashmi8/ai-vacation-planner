@@ -140,7 +140,7 @@ def handle_tool_call(message):
 
 def chat(history):
     history = [{"role": h["role"], "content": h["content"]} for h in history]
-    messages = [ {"role": "system", "content": SYSTEM_PROMPT} ] + history
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
     response = openai.chat.completions.create(
         model=MODEL,
         messages=messages,
@@ -148,29 +148,49 @@ def chat(history):
         max_tokens=500,
     )
     rec_args = None
-    while response.choices[0].finish_reason =="tool_calls":
+
+    while response.choices[0].finish_reason == "tool_calls":
         message = response.choices[0].message
-        rec_args, responses = handle_tool_call(message)
+        rec_args, tool_responses = handle_tool_call(message)
         messages.append(message)
-        messages.extend(responses)
+        messages.extend(tool_responses)
         response = openai.chat.completions.create(
             model=MODEL,
             messages=messages,
             tools=tools,
             max_tokens=500
         )
+
     reply = response.choices[0].message.content
+
+    # If no tool was called but user has answered all 5 questions (past Q&A phase),
+    # force a second call to extract destination from the text reply
+    user_turn_count = sum(1 for m in history if m["role"] == "user")
+    if rec_args is None and user_turn_count >= 5:
+        forced_messages = messages + [
+            {"role": "assistant", "content": reply},
+            {"role": "user", "content": "Please call the recommend_destination tool with the destination you just recommended."}
+        ]
+        forced_response = openai.chat.completions.create(
+            model=MODEL,
+            messages=forced_messages,
+            tools=tools,
+            tool_choice={"type": "function", "function": {"name": "recommend_destination"}}
+        )
+        if forced_response.choices[0].finish_reason == "tool_calls":
+            rec_args, _ = handle_tool_call(forced_response.choices[0].message)
+
     history = history + [{"role": "assistant", "content": reply}]
 
-    image = None
-    audio = None
-
-    # If a tool was called, trigger the image and audio generation functions with the recommended destination
+    # Trigger image and audio if a destination was extracted
     if rec_args:
         image = artist(rec_args["destination"])
         audio = talker(rec_args)
+        image_update = gr.update(value=image, label=f"Recommended Destination: {rec_args['destination']}")
+        return history, image_update, audio
 
-    return history, image, audio
+    # No recommendation — keep existing image visible
+    return history, gr.update(), None
 
 
 def put_message(history, message):

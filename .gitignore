@@ -18,3 +18,5 @@ build/
 *.egg
 travel_recommendation.mp3
 **.mp3
+certificate.pem
+key.pem
